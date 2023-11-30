@@ -1,0 +1,68 @@
+name: Alpha
+on:
+  push:
+    branches:
+      - dev
+      - main
+env:
+  TOMCAT_HOST: ${{ vars.TOMCAT_HOST }}
+  TOMCAT_USERNAME: ${{ vars.TOMCAT_USERNAME }}
+  TOMCAT_PASSWORD: ${{ vars.TOMCAT_PASSWORD }}
+  CONTEXT_PATH: ${{ vars.CONTEXT_PATH }}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: actions/checkout@v2
+        uses: actions/checkout@v2
+      - name: Setup JDK 1.8
+        uses: actions/setup-java@v1
+        with:
+          distribution: corretto
+          java-version: 1.8
+      - name: Install Maven
+        run: |
+          #sudo yum install -y maven
+          sudo apt-get update && sudo apt-get install -y maven
+      - name: Build Maven
+        run: mvn -B package --file pom.xml
+      - name: Publish Artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          path: ${{ github.workspace }}
+          name: drop
+      - name: Archive WAR file
+        uses: actions/upload-artifact@v2
+        with:
+          name: myproject-war
+          path: ${{ github.workspace }}/target/java-hello-world.war
+      - name: Print GitHub Actions workspace path
+        run: |
+          echo "GitHub Actions workspace path: $GITHUB_WORKSPACE"
+          cd $GITHUB_WORKSPACE/target
+          ls
+      - name: Verify JAR file
+        run: |
+          JAR_FILE="${{ github.workspace }}/target/java-hello-world.war"
+          echo "JAR file path: $JAR_FILE"
+          ls -l "$JAR_FILE"
+      - name: Modify JAR file permissions
+        run: chmod +rw "${{ github.workspace }}/target/java-hello-world.war"
+  DeployOnALPHA:
+    name: ALPHA
+    runs-on: ubuntu-latest
+    environment: ALPHA
+    needs: build
+    steps:
+      - name: Download WAR artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: myproject-war
+          path: ${{ github.workspace }}/target
+      - name: Deploy to Tomcat
+        run: >
+          curl -T "${{ github.workspace }}/target/java-hello-world.war"
+          "http://${{env.TOMCAT_HOST}}/manager/text/deploy?path=/${{env.CONTEXT_PATH}}&update=true"
+          \
+
+          --user "${{env.TOMCAT_USERNAME}}:${{env.TOMCAT_PASSWORD}}"
